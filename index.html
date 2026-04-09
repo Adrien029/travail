@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SS-PLL Benchmark</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg:       #f4f5f7;
+  --surface:  #ffffff;
+  --surface2: #f9fafb;
+  --border:   #e2e5ec;
+  --border2:  #cdd1db;
+  --ink:      #111827;
+  --ink2:     #374151;
+  --muted:    #6b7280;
+  --faint:    #9ca3af;
+  --hairline: #e8eaef;
+  --intn:     #2563eb;
+  --intn-bg:  #eff6ff;
+  --intn-bd:  #bfdbfe;
+  --fracn:    #d97706;
+  --fracn-bg: #fffbeb;
+  --fracn-bd: #fde68a;
+  --accent:   #2563eb;
+  --green:    #16a34a;
+  --green-bg: #f0fdf4;
+  --green-bd: #bbf7d0;
+  --red:      #dc2626;
+  --mono:     'IBM Plex Mono', monospace;
+  --serif:    'DM Serif Display', serif;
+  --r: 6px;
+}
+
+html { font-size: 14px; }
+body { background: var(--bg); color: var(--ink); font-family: var(--mono); min-height: 100vh; overflow-x: hidden; }
+
+.shell { max-width: 1480px; margin: 0 auto; padding: 0 32px 72px; }
+
+/* TOPBAR */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding: 28px 0 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.brand-eyebrow { font-size: 9px; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+.brand-title { font-family: var(--serif); font-size: 36px; color: var(--ink); line-height: 1; letter-spacing: -.01em; }
+.brand-title em { color: var(--accent); font-style: italic; }
+.brand-sub { font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: .06em; }
+
+.kpi-strip { display: flex; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.kpi { background: var(--surface); padding: 12px 22px; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 86px; }
+.kpi-val { font-size: 20px; font-weight: 600; color: var(--ink); line-height: 1; letter-spacing: -.02em; }
+.kpi-val.blue  { color: var(--intn); }
+.kpi-val.amber { color: var(--fracn); }
+.kpi-val.green { color: var(--green); }
+.kpi-val.dim   { color: var(--muted); }
+.kpi-lbl { font-size: 8px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+
+/* LEGEND PILLS */
+.legend-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 11px 0; border-bottom: 1px solid var(--hairline); }
+.pill { display: flex; align-items: center; gap: 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; padding: 5px 12px; border-radius: 20px; border: 1px solid; user-select: none; }
+.pill-intn  { color: var(--intn);  background: var(--intn-bg);  border-color: var(--intn-bd); }
+.pill-fracn { color: var(--fracn); background: var(--fracn-bg); border-color: var(--fracn-bd); }
+.pill-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pill-intn .pill-dot  { background: var(--intn); }
+.pill-fracn .pill-dot { background: var(--fracn); }
+.pill-sep { flex: 1; }
+.vis-info { font-size: 9px; color: var(--muted); letter-spacing: .06em; }
+
+/* NAV */
+.nav { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.nav-btn { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; font-weight: 500; padding: 13px 22px; background: transparent; border: none; color: var(--muted); cursor: pointer; position: relative; transition: color .18s; }
+.nav-btn::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: var(--accent); transform: scaleX(0); transition: transform .18s; }
+.nav-btn.active { color: var(--ink); }
+.nav-btn.active::after { transform: scaleX(1); }
+.nav-btn:not(.active):hover { color: var(--ink2); }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* MAIN GRID */
+.main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; margin-top: 16px; }
+@media (max-width: 1060px) { .main-grid { grid-template-columns: 1fr; } }
+
+/* CARD */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.card-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--hairline); background: var(--surface2); gap: 8px; flex-wrap: wrap; }
+.card-label { font-size: 9px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); font-weight: 500; display: flex; align-items: center; gap: 7px; }
+.card-label-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.act-btn { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 5px 11px; background: transparent; border: 1px solid var(--border2); color: var(--muted); border-radius: 4px; cursor: pointer; transition: all .14s; white-space: nowrap; }
+.act-btn:hover { border-color: var(--accent); color: var(--accent); }
+.act-btn.danger:hover { border-color: var(--red); color: var(--red); }
+.act-btn.excel { border-color: var(--green-bd); color: var(--green); background: var(--green-bg); }
+.act-btn.excel:hover { background: var(--green-bd); border-color: var(--green); }
+
+/* CHART */
+.chart-body { padding: 18px; }
+.chart-box { height: 400px; position: relative; }
+.chart-toggles { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+.tog { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 5px 11px; background: transparent; border: 1px solid var(--border2); color: var(--muted); border-radius: 4px; cursor: pointer; transition: all .14s; }
+.tog:hover { border-color: var(--accent); color: var(--accent); }
+.tog.on { background: var(--intn-bg); border-color: var(--intn-bd); color: var(--intn); }
+
+/* TABLE */
+.tbl-outer { overflow-x: auto; max-height: 540px; overflow-y: auto; }
+.tbl-outer::-webkit-scrollbar { width: 5px; height: 5px; }
+.tbl-outer::-webkit-scrollbar-track { background: var(--surface2); }
+.tbl-outer::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+thead { position: sticky; top: 0; z-index: 2; }
+thead th { background: var(--surface2); color: var(--muted); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; font-weight: 500; padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+thead th.th-center { text-align: center; }
+
+tbody tr { border-bottom: 1px solid var(--hairline); transition: background .1s, opacity .2s; animation: rowIn .2s ease; }
+@keyframes rowIn { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:translateY(0); } }
+tbody tr:hover { background: var(--surface2); }
+tbody tr:last-child { border-bottom: none; }
+tbody tr.hidden-row { opacity: .32; }
+tbody tr.hidden-row .stripe-bar { opacity: .3; }
+
+td { padding: 8px 12px; vertical-align: middle; white-space: nowrap; }
+.td-stripe { width: 3px; padding: 0; }
+.stripe-bar { width: 3px; height: 32px; }
+.td-vis { width: 32px; text-align: center; padding: 8px 6px; }
+.td-num { color: var(--ink2); font-weight: 500; font-variant-numeric: tabular-nums; }
+.td-muted { color: var(--muted); }
+
+/* Visibility checkbox */
+.vis-check {
+  appearance: none; -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border: 1.5px solid var(--border2);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  transition: all .14s;
+  background: var(--surface);
+  flex-shrink: 0;
+  display: block;
+  margin: 0 auto;
+}
+.vis-check:checked { background: var(--accent); border-color: var(--accent); }
+.vis-check:checked::after { content: ''; position: absolute; left: 4px; top: 1px; width: 5px; height: 9px; border: 2px solid #fff; border-top: none; border-left: none; transform: rotate(40deg); }
+.vis-check:hover:not(:checked) { border-color: var(--accent); }
+
+/* Select-all header checkbox */
+.vis-all { cursor: pointer; }
+
+/* Category badge */
+.cat-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; padding: 3px 8px; border-radius: 3px; white-space: nowrap; border: 1px solid; }
+.cat-intn  { color: var(--intn);  background: var(--intn-bg);  border-color: var(--intn-bd); }
+.cat-fracn { color: var(--fracn); background: var(--fracn-bg); border-color: var(--fracn-bd); }
+
+.ref-name { color: var(--ink); font-weight: 500; font-size: 11px; }
+.ref-name.linked { color: var(--accent); cursor: pointer; text-decoration: none; }
+.ref-name.linked:hover { text-decoration: underline; }
+.ref-sub { color: var(--muted); font-size: 10px; margin-top: 2px; }
+
+.doc-link { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; color: var(--accent); text-decoration: none; border: 1px solid var(--intn-bd); padding: 3px 9px; border-radius: 3px; background: var(--intn-bg); transition: all .14s; }
+.doc-link:hover { background: var(--intn-bd); }
+.doc-none { color: var(--faint); font-size: 10px; }
+
+.del-btn { background: none; border: none; color: var(--faint); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 5px; border-radius: 3px; transition: all .14s; }
+.del-btn:hover { color: var(--red); background: #fee2e2; }
+
+.empty-row td { padding: 44px; text-align: center; color: var(--faint); font-size: 11px; line-height: 2; }
+
+/* ADD FORM */
+.add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1000px; }
+@media (max-width: 720px) { .add-grid { grid-template-columns: 1fr; } }
+
+.form-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 26px; box-shadow: 0 1px 3px rgba(0,0,0,.05); position: relative; }
+.form-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: var(--r) var(--r) 0 0; }
+.form-card.left::before  { background: linear-gradient(90deg, var(--intn), #60a5fa); }
+.form-card.right::before { background: linear-gradient(90deg, var(--fracn), #f59e0b); }
+
+.form-title { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-bottom: 22px; display: flex; align-items: center; gap: 10px; }
+.form-title::after { content:''; flex:1; height:1px; background:var(--hairline); }
+
+.field { margin-bottom: 15px; }
+.field:last-child { margin-bottom: 0; }
+.field label { display: block; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+.field label .req { color: var(--red); margin-left: 2px; }
+.field label .opt { color: var(--faint); font-size: 8px; margin-left: 5px; }
+
+.field input, .field textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  color: var(--ink); font-family: var(--mono); font-size: 12px;
+  padding: 9px 12px; border-radius: 4px; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.field input::placeholder, .field textarea::placeholder { color: var(--faint); }
+.field input:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.1); background: var(--surface); }
+.field textarea { resize: vertical; min-height: 60px; }
+
+.cat-select { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cat-opt { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 5px; cursor: pointer; transition: all .15s; background: var(--bg); }
+.cat-opt input[type=radio] { display: none; }
+.cat-opt .cat-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--border2); flex-shrink: 0; transition: all .15s; }
+.cat-opt .cat-label-text { font-size: 10px; letter-spacing: .06em; font-weight: 500; color: var(--ink2); line-height: 1.3; }
+.cat-opt .cat-label-sub  { font-size: 9px; color: var(--muted); }
+.cat-opt.sel-intn  { border-color: var(--intn-bd);  background: var(--intn-bg);  }
+.cat-opt.sel-intn  .cat-dot { background: var(--intn);  border-color: var(--intn);  }
+.cat-opt.sel-intn  .cat-label-text { color: var(--intn); }
+.cat-opt.sel-fracn { border-color: var(--fracn-bd); background: var(--fracn-bg); }
+.cat-opt.sel-fracn .cat-dot { background: var(--fracn); border-color: var(--fracn); }
+.cat-opt.sel-fracn .cat-label-text { color: var(--fracn); }
+
+.url-row { display: flex; gap: 8px; }
+.url-row input { flex: 1; }
+.url-test { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 9px 13px; background: transparent; border: 1px solid var(--border2); color: var(--muted); border-radius: 4px; cursor: pointer; transition: all .14s; white-space: nowrap; flex-shrink: 0; }
+.url-test:hover { border-color: var(--accent); color: var(--accent); }
+.url-hint { margin-top: 7px; padding: 9px 12px; background: var(--intn-bg); border: 1px solid var(--intn-bd); border-radius: 4px; font-size: 10px; color: var(--muted); line-height: 1.7; }
+
+.cpick { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 4px; }
+.csw { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .15s, border-color .15s; }
+.csw:hover { transform: scale(1.18); }
+.csw.on { border-color: var(--ink); }
+
+.submit-row { display: flex; gap: 10px; margin-top: 22px; align-items: center; flex-wrap: wrap; }
+.btn-submit { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; padding: 12px 26px; background: var(--accent); color: #fff; border: none; border-radius: 4px; cursor: pointer; transition: opacity .15s, transform .1s; box-shadow: 0 1px 4px rgba(37,99,235,.25); }
+.btn-submit:hover { opacity: .88; transform: translateY(-1px); }
+.btn-clear { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 12px 16px; background: transparent; border: 1px solid var(--border2); color: var(--muted); border-radius: 4px; cursor: pointer; transition: all .14s; }
+.btn-clear:hover { border-color: var(--ink2); color: var(--ink2); }
+
+/* EXPORT PANEL */
+.exp-wrap { max-width: 720px; display: flex; flex-direction: column; gap: 18px; }
+.exp-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 26px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+.exp-card p { font-size: 11px; color: var(--muted); line-height: 1.9; margin-bottom: 16px; }
+.exp-card code { display: block; background: #1e293b; color: #94d17a; border-radius: 4px; padding: 16px; font-family: var(--mono); font-size: 10px; line-height: 1.9; white-space: pre; overflow-x: auto; margin-bottom: 16px; }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* TOAST */
+.toast { position: fixed; bottom: 26px; right: 26px; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .08em; padding: 11px 20px; border-radius: 5px; z-index: 10000; transform: translateY(10px); opacity: 0; transition: all .2s; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.15); }
+.toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div>
+    <div class="brand-eyebrow">État de l'art · RF / Analog IC Design</div>
+    <div class="brand-title">Sub-Sampling <em>PLL</em></div>
+    <div class="brand-sub">Jitter RMS² [ps²] vs. Puissance consommée [mW]</div>
+  </div>
+  <div class="kpi-strip">
+    <div class="kpi"><div class="kpi-val"        id="kpi-n">0</div><div class="kpi-lbl">Total</div></div>
+    <div class="kpi"><div class="kpi-val blue"    id="kpi-intn">0</div><div class="kpi-lbl">Int-N</div></div>
+    <div class="kpi"><div class="kpi-val amber"   id="kpi-fracn">0</div><div class="kpi-lbl">Frac-N</div></div>
+    <div class="kpi"><div class="kpi-val dim"     id="kpi-vis">0</div><div class="kpi-lbl">Visibles</div></div>
+    <div class="kpi"><div class="kpi-val green"   id="kpi-j">—</div><div class="kpi-lbl">Min J²</div></div>
+    <div class="kpi"><div class="kpi-val"         id="kpi-p">—</div><div class="kpi-lbl">Min P</div></div>
+  </div>
+</header>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="switchTab('view', this)">Tableau &amp; Graphe</button>
+  <button class="nav-btn"        onclick="switchTab('add',  this)">+ Ajouter un point</button>
+  <button class="nav-btn"        onclick="switchTab('exp',  this)">Export</button>
+</nav>
+
+<!-- ══════════ TAB: VIEW ══════════ -->
+<div class="panel active" id="panel-view">
+
+  <div class="legend-bar">
+    <div class="pill pill-intn"><div class="pill-dot"></div>Int-N SS-PLL ●</div>
+    <div class="pill pill-fracn"><div class="pill-dot"></div>Frac-N SS-PLL ▲</div>
+    <div class="pill-sep"></div>
+    <div class="vis-info" id="vis-info"></div>
+  </div>
+
+  <div class="main-grid">
+
+    <!-- SCATTER PLOT -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-label"><div class="card-label-dot"></div>Scatter Plot</div>
+        <div class="card-actions">
+          <button class="act-btn" onclick="chartInst.resetZoom()">↺ Zoom</button>
+          <button class="act-btn" onclick="dlPNG()">⬇ PNG</button>
+        </div>
+      </div>
+      <div class="chart-body">
+        <div class="chart-box"><canvas id="myChart"></canvas></div>
+        <div class="chart-toggles">
+          <button class="tog" id="tog-lx" onclick="toggleAxis('x')">Log X</button>
+          <button class="tog" id="tog-ly" onclick="toggleAxis('y')">Log Y</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-label"><div class="card-label-dot"></div>Références (<span id="tbl-count">0</span>)</div>
+        <div class="card-actions">
+          <button class="act-btn excel" onclick="exportExcel()">⬇ Excel</button>
+          <button class="act-btn" onclick="switchTab('add', document.querySelectorAll('.nav-btn')[1])">+ Ajouter</button>
+          <button class="act-btn danger" onclick="clearAll()">Effacer tout</button>
+        </div>
+      </div>
+      <div class="tbl-outer">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:3px;padding:0"></th>
+              <th class="th-center" style="width:32px">
+                <!-- Select-all checkbox -->
+                <input type="checkbox" class="vis-check vis-all" id="chk-all" checked title="Tout afficher / masquer" onchange="toggleAllVisibility(this.checked)">
+              </th>
+              <th>Référence</th>
+              <th>Catégorie</th>
+              <th>P (mW)</th>
+              <th>J² (ps²)</th>
+              <th>FOM (dB)</th>
+              <th>Doc</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbl-body">
+            <tr class="empty-row"><td colspan="9">Aucune donnée — utilisez « + Ajouter un point »</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ TAB: ADD ══════════ -->
+<div class="panel" id="panel-add">
+  <div class="add-grid">
+
+    <div class="form-card left">
+      <div class="form-title">Mesures</div>
+      <div class="field">
+        <label>Catégorie <span class="req">*</span></label>
+        <div class="cat-select" id="cat-select">
+          <label class="cat-opt sel-intn" id="opt-intn" onclick="selectCat('intn')">
+            <input type="radio" name="cat" value="intn" checked>
+            <div class="cat-dot"></div>
+            <div><div class="cat-label-text">Int-N</div><div class="cat-label-sub">SS-PLL</div></div>
+          </label>
+          <label class="cat-opt" id="opt-fracn" onclick="selectCat('fracn')">
+            <input type="radio" name="cat" value="fracn">
+            <div class="cat-dot"></div>
+            <div><div class="cat-label-text">Frac-N</div><div class="cat-label-sub">SS-PLL</div></div>
+          </label>
+        </div>
+      </div>
+      <div class="field"><label>Puissance <span class="req">*</span><span class="opt">mW</span></label><input type="number" id="f-power" step="any" min="0" placeholder="ex: 2.4"></div>
+      <div class="field"><label>Jitter RMS² <span class="req">*</span><span class="opt">ps²</span></label><input type="number" id="f-jitter" step="any" min="0" placeholder="ex: 0.0063"></div>
+      <div class="field"><label>FOM <span class="opt">dB</span></label><input type="number" id="f-fom" step="any" placeholder="ex: −238"></div>
+      <div class="field"><label>Fréquence <span class="opt">GHz</span></label><input type="number" id="f-freq" step="any" min="0" placeholder="ex: 2.4"></div>
+      <div class="field"><label>Technologie</label><input type="text" id="f-tech" placeholder="ex: 65nm CMOS"></div>
+    </div>
+
+    <div class="form-card right">
+      <div class="form-title">Référence &amp; Document</div>
+      <div class="field"><label>Auteurs / Titre court <span class="req">*</span></label><input type="text" id="f-ref" placeholder="ex: Gao et al. 2009"></div>
+      <div class="field"><label>Journal / Conférence</label><input type="text" id="f-venue" placeholder="ex: ISSCC, JSSC, TCAS…"></div>
+      <div class="field"><label>Année</label><input type="number" id="f-year" min="1990" max="2035" placeholder="ex: 2023"></div>
+      <div class="field">
+        <label>URL du document <span class="opt">IEEE, DOI, arXiv, PDF…</span></label>
+        <div class="url-row">
+          <input type="url" id="f-url" placeholder="https://ieeexplore.ieee.org/document/…">
+          <button class="url-test" onclick="testUrl()">↗ Test</button>
+        </div>
+        <div class="url-hint">N'importe quelle URL — cliquer sur la référence ouvrira ce lien.</div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Topologie, architecture, remarques…"></textarea></div>
+      <div class="field"><label>Couleur du point</label><div class="cpick" id="cpick"></div></div>
+      <div class="submit-row">
+        <button class="btn-submit" onclick="addPoint()">Ajouter →</button>
+        <button class="btn-clear"  onclick="clearForm()">Réinitialiser</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ TAB: EXPORT ══════════ -->
+<div class="panel" id="panel-exp">
+  <div class="exp-wrap">
+    <div class="exp-card">
+      <div class="form-title">Export</div>
+      <p>Exportez vos données en différents formats. L'export Excel inclut toutes les références avec leur catégorie, mesures et URL.</p>
+      <div class="btn-row">
+        <button class="btn-submit act-btn excel" style="padding:11px 22px;font-size:11px;letter-spacing:.1em" onclick="exportExcel()">⬇ Export Excel (.xlsx)</button>
+        <button class="btn-clear" onclick="exportJSON()">⬇ Export JSON</button>
+        <button class="btn-clear" onclick="importJSON()">⬆ Import JSON</button>
+      </div>
+    </div>
+    <div class="exp-card">
+      <div class="form-title">GitHub Pages</div>
+      <p>Ce fichier est auto-contenu. Pour le mettre en ligne :</p>
+      <code>1. Uploadez index.html dans votre repo GitHub
+2. Settings → Pages → Branch: main / root → Save
+3. Votre site : https://adrien029.github.io/travail/</code>
+    </div>
+  </div>
+</div>
+
+</div><!-- /shell -->
+
+<div class="toast" id="toast"></div>
+<input type="file" id="json-input" accept=".json" style="display:none" onchange="handleImport(event)">
+
+<script>
+/* ════════════════════════
+   CONFIG & SUPABASE
+════════════════════════ */
+// 1. Remplace bien par tes vraies clés ici
+const SUPABASE_URL = 'https://lpfhorjimbfxvmzoxxrj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_1xBLXFe6ZtqMiWsB1bbGsg_TqB-nBEX '; 
+
+// 2. On initialise le client (Note le nom : supabaseClient)
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const PALETTE = ['#2563eb','#d97706','#16a34a','#dc2626','#7c3aed','#0891b2','#be185d','#059669','#ea580c','#4f46e5'];
+const CAT_LABELS = { intn: 'Int-N', fracn: 'Frac-N' };
+
+/* ════════════════════════
+   STATE
+════════════════════════ */
+let data = []; 
+let selColor = PALETTE[0];
+let selCat   = 'intn';
+let logX     = false;
+let logY     = true;
+
+/* ════════════════════════
+   SUPABASE SYNC
+════════════════════════ */
+
+// Charger les données au démarrage
+async function loadFromCloud() {
+  const { data: cloudData, error } = await supabaseClient
+    .from('sspll_data')
+    .select('content');
+
+  if (error) {
+    console.error("Erreur de chargement:", error);
+    showToast("Erreur de connexion cloud", "#dc2626");
+  } else if (cloudData) {
+    // On transforme le format JSONB de Supabase en tableau utilisable par le site
+    data = cloudData.map(item => item.content);
+    refreshUIOnly(); 
+  }
+}
+
+// Sauvegarder un point (Ajout)
+async function saveToCloud(newPoint) {
+  const { error } = await supabaseClient
+    .from('sspll_data')
+    .insert([{ content: newPoint }]);
+  
+  if (error) {
+      console.error(error);
+      showToast("Erreur d'enregistrement cloud", "#dc2626");
+  }
+}
+
+// Supprimer un point
+async function deleteFromCloud(id) {
+    const { error } = await supabaseClient
+      .from('sspll_data')
+      .delete()
+      .filter('content->>id', 'eq', id); 
+    
+    if (error) console.error("Erreur de suppression:", error);
+}
+
+// Fonction pour rafraîchir l'affichage sans réenregistrer en boucle
+function refreshUIOnly() { rebuildChart(); rebuildTable(); updateKPIs(); }
+
+// On remplace l'ancienne fonction refresh() qui utilisait le localStorage
+function refresh() { 
+    refreshUIOnly(); 
+    // On ne met plus save() ici car save() utilisait le localStorage
+}
+
+/* ════════════════════════
+   UTILS
+════════════════════════ */
+const uid  = () => Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+const esc  = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const save = ()  => localStorage.setItem(LS_KEY, JSON.stringify(data));
+
+function refresh() { rebuildChart(); rebuildTable(); updateKPIs(); save(); }
+
+/* ════════════════════════
+   VISIBILITY
+════════════════════════ */
+// Each entry has d.visible (boolean, default true)
+// Hidden entries are grayed in table and excluded from chart
+
+function visibleData() { return data.filter(d => d.visible !== false); }
+
+function toggleVisibility(id) {
+  const d = data.find(x => x.id === id);
+  if (!d) return;
+  d.visible = d.visible === false ? true : false;
+  refresh();
+}
+
+function toggleAllVisibility(checked) {
+  data.forEach(d => { d.visible = checked; });
+  refresh();
+}
+
+function syncSelectAll() {
+  const chkAll = document.getElementById('chk-all');
+  if (!chkAll) return;
+  const total   = data.length;
+  const visible = data.filter(d => d.visible !== false).length;
+  chkAll.checked       = visible === total;
+  chkAll.indeterminate = visible > 0 && visible < total;
+}
+
+/* ════════════════════════
+   CHART
+════════════════════════ */
+function buildDatasets() {
+  return visibleData().map(d => ({
+    label: d.ref,
+    data: [{ x: d.power, y: d.jitter, ...d }],
+    backgroundColor: d.color + 'bb',
+    borderColor: d.color,
+    pointRadius: 9,
+    pointHoverRadius: 13,
+    borderWidth: 1.8,
+    pointStyle: d.cat === 'fracn' ? 'triangle' : 'circle',
+  }));
+}
+
+const chartInst = new Chart(
+  document.getElementById('myChart').getContext('2d'),
+  {
+    type: 'scatter',
+    data: { datasets: [] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 300, easing: 'easeOutQuart' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1,
+          titleFont: { family:"'IBM Plex Mono',monospace", size:11, weight:'600' },
+          bodyFont:  { family:"'IBM Plex Mono',monospace", size:10 },
+          padding: 14,
+          callbacks: {
+            title: items => chartInst.data.datasets[items[0].datasetIndex].label || '',
+            label: item  => {
+              const d = item.raw;
+              const lines = [
+                `Catég. : ${CAT_LABELS[d.cat]||'—'} SS-PLL`,
+                `Power  : ${d.x} mW`,
+                `Jitter²: ${d.y} ps²`,
+              ];
+              if (d.fom)   lines.push(`FOM    : ${d.fom} dB`);
+              if (d.freq)  lines.push(`Freq   : ${d.freq} GHz`);
+              if (d.tech)  lines.push(`Tech   : ${d.tech}`);
+              if (d.venue) lines.push(`${d.venue}${d.year?' · '+d.year:''}`);
+              if (d.url)   lines.push('↗ Clic pour ouvrir');
+              return lines;
+            }
+          }
+        },
+        zoom: {
+          zoom: { wheel:{enabled:true}, pinch:{enabled:true}, mode:'xy' },
+          pan:  { enabled:true, mode:'xy' }
+        }
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const raw = chartInst.data.datasets[elements[0].datasetIndex].data[0];
+        if (raw.url) window.open(raw.url, '_blank', 'noopener');
+      },
+      scales: {
+        x: { type:'linear',      title:{display:true,text:'Puissance [mW]',   font:{family:"'IBM Plex Mono',monospace",size:10},color:'#6b7280'}, grid:{color:'rgba(0,0,0,0.05)'}, ticks:{font:{family:"'IBM Plex Mono',monospace",size:9},color:'#6b7280'} },
+        y: { type:'logarithmic', title:{display:true,text:'Jitter RMS² [ps²]',font:{family:"'IBM Plex Mono',monospace",size:10},color:'#6b7280'}, grid:{color:'rgba(0,0,0,0.05)'}, ticks:{font:{family:"'IBM Plex Mono',monospace",size:9},color:'#6b7280'} }
+      }
+    }
+  }
+);
+
+function rebuildChart() {
+  chartInst.data.datasets = buildDatasets();
+  chartInst.update();
+}
+
+function toggleAxis(axis) {
+  if (axis === 'x') { logX=!logX; chartInst.options.scales.x.type=logX?'logarithmic':'linear'; document.getElementById('tog-lx').classList.toggle('on',logX); }
+  else              { logY=!logY; chartInst.options.scales.y.type=logY?'logarithmic':'linear'; document.getElementById('tog-ly').classList.toggle('on',logY); }
+  chartInst.update();
+}
+
+function dlPNG() {
+  const a = document.createElement('a'); a.download='sspll_benchmark.png';
+  a.href = document.getElementById('myChart').toDataURL('image/png'); a.click();
+}
+
+/* ════════════════════════
+   TABLE
+════════════════════════ */
+function rebuildTable() {
+  const tbody = document.getElementById('tbl-body');
+  document.getElementById('tbl-count').textContent = data.length;
+
+  if (!data.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">Aucune donnée — utilisez « + Ajouter un point »</td></tr>`;
+    syncSelectAll();
+    return;
+  }
+
+  tbody.innerHTML = data.map((d, i) => {
+    const isVisible = d.visible !== false;
+    const venue = [d.venue, d.year].filter(Boolean).join(' · ');
+    const catClass = d.cat === 'fracn' ? 'cat-fracn' : 'cat-intn';
+    const catShape = d.cat === 'fracn' ? '▲' : '●';
+    const catTxt   = d.cat === 'fracn' ? 'Frac-N' : 'Int-N';
+
+    const docCell = d.url
+      ? `<a class="doc-link" href="${esc(d.url)}" target="_blank" rel="noopener">↗ Ouvrir</a>`
+      : `<span class="doc-none">—</span>`;
+
+    const refCell = d.url
+      ? `<a class="ref-name linked" href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.ref)}</a>`
+      : `<div class="ref-name">${esc(d.ref)}</div>`;
+
+    return `
+    <tr class="${isVisible ? '' : 'hidden-row'}">
+      <td class="td-stripe"><div class="stripe-bar" style="background:${d.color};opacity:${isVisible?1:.3}"></div></td>
+      <td class="td-vis">
+        <input type="checkbox" class="vis-check"
+          ${isVisible ? 'checked' : ''}
+          title="${isVisible ? 'Masquer du graphe' : 'Afficher sur le graphe'}"
+          onchange="toggleVisibility('${d.id}')">
+      </td>
+      <td>
+        ${refCell}
+        ${venue ? `<div class="ref-sub">${esc(venue)}</div>` : ''}
+      </td>
+      <td><span class="cat-badge ${catClass}">${catShape} ${catTxt}</span></td>
+      <td class="td-num">${d.power}</td>
+      <td class="td-num">${d.jitter}</td>
+      <td class="td-muted">${d.fom || '—'}</td>
+      <td>${docCell}</td>
+      <td><button class="del-btn" onclick="delPoint(${i})" title="Supprimer définitivement">×</button></td>
+    </tr>`;
+  }).join('');
+
+  syncSelectAll();
+}
+
+/* ════════════════════════
+   KPIs
+════════════════════════ */
+function updateKPIs() {
+  const n     = data.length;
+  const nIntn = data.filter(d => d.cat === 'intn').length;
+  const nFrac = data.filter(d => d.cat === 'fracn').length;
+  const nVis  = visibleData().length;
+  document.getElementById('kpi-n').textContent     = n;
+  document.getElementById('kpi-intn').textContent  = nIntn;
+  document.getElementById('kpi-fracn').textContent = nFrac;
+  document.getElementById('kpi-vis').textContent   = nVis;
+  document.getElementById('vis-info').textContent  =
+    `${nVis} affiché${nVis>1?'s':''} sur ${n}`;
+
+  const vis = visibleData();
+  if (!vis.length) {
+    document.getElementById('kpi-j').textContent = '—';
+    document.getElementById('kpi-p').textContent = '—';
+  } else {
+    document.getElementById('kpi-j').textContent = Math.min(...vis.map(d => d.jitter));
+    document.getElementById('kpi-p').textContent = Math.min(...vis.map(d => d.power));
+  }
+}
+
+/* ════════════════════════
+   EXCEL EXPORT
+════════════════════════ */
+function exportExcel() {
+  if (!data.length) { showToast('⚠ Aucune donnée à exporter', '#dc2626'); return; }
+
+  // Build rows
+  const headers = ['Référence','Catégorie','Puissance (mW)','Jitter RMS² (ps²)','FOM (dB)','Fréquence (GHz)','Technologie','Journal / Conférence','Année','URL','Notes','Visible'];
+  const rows = data.map(d => [
+    d.ref          || '',
+    (CAT_LABELS[d.cat] || 'Int-N') + ' SS-PLL',
+    d.power        ?? '',
+    d.jitter       ?? '',
+    d.fom          || '',
+    d.freq         || '',
+    d.tech         || '',
+    d.venue        || '',
+    d.year         || '',
+    d.url          || '',
+    d.notes        || '',
+    d.visible !== false ? 'Oui' : 'Non',
+  ]);
+
+  const wsData = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Column widths
+  ws['!cols'] = [
+    {wch:28},{wch:14},{wch:16},{wch:18},{wch:10},{wch:14},{wch:16},{wch:18},{wch:8},{wch:40},{wch:30},{wch:8}
+  ];
+
+  // Style header row (bold) — requires a premium SheetJS feature, use basic approach
+  // Mark header cells bold via cell metadata (supported in xlsx.full.min.js)
+  headers.forEach((_, ci) => {
+    const cellAddr = XLSX.utils.encode_cell({ r: 0, c: ci });
+    if (!ws[cellAddr]) return;
+    ws[cellAddr].s = { font: { bold: true }, fill: { fgColor: { rgb: 'EFF6FF' } } };
+  });
+
+  // Freeze top row
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'SS-PLL Benchmark');
+
+  // Add a second sheet: visible only
+  const visRows = data.filter(d => d.visible !== false).map(d => [
+    d.ref||'', (CAT_LABELS[d.cat]||'Int-N')+' SS-PLL',
+    d.power??'', d.jitter??'', d.fom||'', d.freq||'', d.tech||'',
+    d.venue||'', d.year||'', d.url||'', d.notes||''
+  ]);
+  const ws2 = XLSX.utils.aoa_to_sheet([headers.slice(0,-1), ...visRows]);
+  ws2['!cols'] = ws['!cols'].slice(0,-1);
+  XLSX.utils.book_append_sheet(wb, ws2, 'Visibles uniquement');
+
+  XLSX.writeFile(wb, 'sspll_benchmark.xlsx');
+  showToast('✓ Export Excel (.xlsx)', '#16a34a');
+}
+
+/* ════════════════════════
+   CATEGORY SELECTOR
+════════════════════════ */
+function selectCat(cat) {
+  selCat = cat;
+  document.getElementById('opt-intn').className  = `cat-opt${cat==='intn' ?' sel-intn':''}`;
+  document.getElementById('opt-fracn').className = `cat-opt${cat==='fracn'?' sel-fracn':''}`;
+  document.querySelectorAll('input[name="cat"]').forEach(r => { r.checked = r.value === cat; });
+  if (cat==='intn'  && selColor===PALETTE[1]) { selColor=PALETTE[0]; syncPickerState(); }
+  if (cat==='fracn' && selColor===PALETTE[0]) { selColor=PALETTE[1]; syncPickerState(); }
+}
+
+/* ════════════════════════
+   COLOR PICKER
+════════════════════════ */
+function buildPicker() {
+  document.getElementById('cpick').innerHTML = PALETTE.map((c,i) =>
+    `<div class="csw ${i===0?'on':''}" style="background:${c}" onclick="pickColor('${c}',this)"></div>`
+  ).join('');
+}
+function pickColor(c, el) {
+  selColor = c;
+  document.querySelectorAll('.csw').forEach(s => s.classList.remove('on'));
+  el.classList.add('on');
+}
+function syncPickerState() {
+  document.querySelectorAll('.csw').forEach(s => {
+    s.classList.toggle('on', s.style.background === selColor || s.style.backgroundColor === selColor);
+  });
+}
+
+/* ════════════════════════
+   ADD POINT
+════════════════════════ */
+async function addPoint() {
+  const power  = parseFloat(document.getElementById('f-power').value);
+  const jitter = parseFloat(document.getElementById('f-jitter').value);
+  const ref    = document.getElementById('f-ref').value.trim();
+  const url    = document.getElementById('f-url').value.trim() || null;
+
+  // 1. Validation des entrées
+  if (isNaN(power)  || power  < 0) { showToast('⚠ Puissance invalide',  '#dc2626'); return; }
+  if (isNaN(jitter) || jitter < 0) { showToast('⚠ Jitter² invalide',    '#dc2626'); return; }
+  if (!ref)                         { showToast('⚠ Référence manquante', '#dc2626'); return; }
+  if (url && !url.startsWith('http')) { showToast('⚠ URL invalide',      '#dc2626'); return; }
+
+  // 2. Création de l'objet point
+  const newPoint = {
+    id: uid(), 
+    cat: selCat, 
+    power, 
+    jitter, 
+    ref, 
+    url, 
+    color: selColor,
+    visible: true,
+    fom:   document.getElementById('f-fom').value.trim()   || null,
+    freq:  document.getElementById('f-freq').value.trim()  || null,
+    tech:  document.getElementById('f-tech').value.trim()  || null,
+    venue: document.getElementById('f-venue').value.trim() || null,
+    year:  document.getElementById('f-year').value.trim()  || null,
+    notes: document.getElementById('f-notes').value.trim() || null,
+  };
+
+  // 3. Mise à jour de l'interface locale (pour un effet immédiat)
+  data.push(newPoint);
+  refreshUIOnly(); 
+
+  // 4. Envoi vers Supabase
+  await saveToCloud(newPoint);
+
+  // 5. Finalisation
+  clearForm();
+  showToast(`✓ ${CAT_LABELS[selCat]} SS-PLL ajouté au cloud !`, '#16a34a');
+  switchTab('view', document.querySelectorAll('.nav-btn')[0]);
+}
+
+
+function clearForm() {
+  ['f-power','f-jitter','f-fom','f-freq','f-tech','f-ref','f-venue','f-year','f-url','f-notes'].forEach(id => { document.getElementById(id).value=''; });
+  selectCat('intn');
+  selColor = PALETTE[0];
+  document.querySelectorAll('.csw').forEach((s,i) => s.classList.toggle('on', i===0));
+}
+
+function testUrl() {
+  const url = document.getElementById('f-url').value.trim();
+  if (!url) { showToast('⚠ Aucune URL saisie','#dc2626'); return; }
+  window.open(url,'_blank','noopener');
+}
+
+/* ════════════════════════
+   DELETE / CLEAR
+════════════════════════ */
+async function delPoint(i) {
+  const pointToDelete = data[i];
+  if (!pointToDelete) return;
+
+  const refName = pointToDelete.ref || '';
+
+  // 1. Suppression sur Supabase
+  // On utilise l'ID du point pour être sûr de supprimer la bonne ligne
+  await deleteFromCloud(pointToDelete.id);
+
+  // 2. Mise à jour de l'interface locale
+  data.splice(i, 1);
+  refreshUIOnly();
+
+  // 3. Notification
+  showToast(`Supprimé du cloud : ${refName}`);
+}
+
+function clearAll() {
+  if (!data.length) return;
+  if (!confirm(`Supprimer définitivement les ${data.length} point(s) ?`)) return;
+  data=[]; refresh(); showToast('Données effacées');
+}
+
+/* ════════════════════════
+   TABS
+════════════════════════ */
+function switchTab(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ════════════════════════
+   EXPORT / IMPORT JSON
+════════════════════════ */
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+  const a = document.createElement('a'); a.download='sspll_benchmark.json';
+  a.href = URL.createObjectURL(blob); a.click();
+  showToast('✓ Export JSON','#16a34a');
+}
+function importJSON() { document.getElementById('json-input').click(); }
+function handleImport(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      let parsed = JSON.parse(ev.target.result);
+      if (!Array.isArray(parsed)) parsed = parsed.data||[];
+      const imported = parsed.map(d => ({ cat:'intn', visible:true, ...d, id:d.id||uid() }));
+      data = [...data, ...imported];
+      refresh();
+      showToast(`✓ ${imported.length} point(s) importé(s)`,'#16a34a');
+    } catch { showToast('⚠ JSON invalide','#dc2626'); }
+  };
+  reader.readAsText(file);
+  e.target.value='';
+}
+
+/* ════════════════════════
+   TOAST
+════════════════════════ */
+function showToast(msg, bg) {
+  const t = document.getElementById('toast');
+  t.textContent=msg; t.style.background=bg||'#111827'; t.style.color='#fff';
+  t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+/* ════════════════════════
+   INIT
+════════════════════════ */
+// 1. Configuration visuelle par défaut
+buildPicker();
+document.getElementById('tog-ly').classList.add('on');
+
+// 2. On vide la variable locale pour accueillir les données du Cloud
+data = []; 
+
+// 3. On lance le chargement depuis Supabase
+// Cette fonction va remplir 'data' et appeler refreshUIOnly() toute seule
+loadFromCloud();
+</script>
+</body>
+</html>
