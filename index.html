@@ -366,12 +366,7 @@ td { padding: 8px 12px; vertical-align: middle; white-space: nowrap; }
       <div class="field"><label>Technologie</label><input type="text" id="f-tech" placeholder="ex: 65nm CMOS"></div>
     </div>
 
-    <footer style="margin-top: 50px; padding: 20px 0; border-top: 1px solid var(--border); text-align: center; color: var(--muted); font-size: 11px;">
-        <p>Développé par <strong>Adrien Houpeaux</strong> — © 2024</p>
-        <p>État de l'art sur les SS-PLL</p>
-    </footer>
-    
-
+  
     <div class="form-card right">
       <div class="form-title">Référence &amp; Document</div>
       <div class="field"><label>Auteurs / Titre court <span class="req">*</span></label><input type="text" id="f-ref" placeholder="ex: Gao et al. 2009"></div>
@@ -420,23 +415,25 @@ td { padding: 8px 12px; vertical-align: middle; white-space: nowrap; }
 
 </div><!-- /shell -->
 
-<div class="toast" id="toast"></div>
-<input type="file" id="json-input" accept=".json" style="display:none" onchange="handleImport(event)">
-<footer style="margin-top: 50px; padding: 20px 0; border-top: 1px solid var(--border); text-align: center; color: var(--muted); font-size: 11px;">
-  <p>Développé par <strong>Adrien Houpeaux</strong> — © 2024</p>
-  <p>État de l'art sur les SS-PLL</p>
-</footer>
-<script>
+</div>
+  </div>
+</div>
 
-  
+<footer style="margin-top: 50px; padding: 20px 0; border-top: 1px solid var(--border); text-align: center; color: var(--muted); font-size: 11px;">
+    <p>Développé par <strong>Adrien Houpeaux</strong> — © 2024</p>
+    <p>État de l'art sur les SS-PLL maintenu via Supabase</p>
+</footer>
+
+</div><div class="toast" id="toast"></div>
+<input type="file" id="json-input" accept=".json" style="display:none" onchange="handleImport(event)">
+
+<script>
 /* ════════════════════════
    CONFIG & SUPABASE
 ════════════════════════ */
-// 1. Remplace bien par tes vraies clés ici
 const SUPABASE_URL = 'https://lpfhorjimbfxvmzoxxrj.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_1xBLXFe6ZtqMiWsB1bbGsg_TqB-nBEX'; 
 
-// 2. On initialise le client (Note le nom : supabaseClient)
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const PALETTE = ['#2563eb','#d97706','#16a34a','#dc2626','#7c3aed','#0891b2','#be185d','#059669','#ea580c','#4f46e5'];
@@ -455,7 +452,6 @@ let logY     = true;
    SUPABASE SYNC
 ════════════════════════ */
 
-// Charger les données au démarrage
 async function loadFromCloud() {
   const { data: cloudData, error } = await supabaseClient
     .from('sspll_data')
@@ -465,13 +461,11 @@ async function loadFromCloud() {
     console.error("Erreur de chargement:", error);
     showToast("Erreur de connexion cloud", "#dc2626");
   } else if (cloudData) {
-    // On transforme le format JSONB de Supabase en tableau utilisable par le site
     data = cloudData.map(item => item.content);
     refreshUIOnly(); 
   }
 }
 
-// Sauvegarder un point (Ajout)
 async function saveToCloud(newPoint) {
   const { error } = await supabaseClient
     .from('sspll_data')
@@ -483,7 +477,6 @@ async function saveToCloud(newPoint) {
   }
 }
 
-// Supprimer un point
 async function deleteFromCloud(id) {
     const { error } = await supabaseClient
       .from('sspll_data')
@@ -493,14 +486,20 @@ async function deleteFromCloud(id) {
     if (error) console.error("Erreur de suppression:", error);
 }
 
-// Fonction pour rafraîchir l'affichage sans réenregistrer en boucle
-function refreshUIOnly() { rebuildChart(); rebuildTable(); updateKPIs(); }
+function refreshUIOnly() { 
+    rebuildChart(); 
+    rebuildTable(); 
+    updateKPIs(); 
+    syncSelectAll();
+}
 
-// On remplace l'ancienne fonction refresh() qui utilisait le localStorage
 function refresh() { 
     refreshUIOnly(); 
-    // On ne met plus save() ici car save() utilisait le localStorage
 }
+
+
+
+  
 
 /* ════════════════════════
    UTILS
