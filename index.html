@@ -71,6 +71,12 @@ body { background: var(--bg); color: var(--ink); font-family: var(--mono); min-h
 .pill-fracn .pill-dot { background: var(--fracn); }
 .pill-sep { flex: 1; }
 .vis-info { font-size: 9px; color: var(--muted); letter-spacing: .06em; }
+.pill-tech {
+  color: var(--ink2);
+  background: var(--surface2);
+  border-color: var(--border);
+}
+  
 
 /* NAV */
 .nav { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
@@ -274,11 +280,18 @@ td { padding: 8px 12px; vertical-align: middle; white-space: nowrap; }
 <div class="panel active" id="panel-view">
 
   <div class="legend-bar">
-    <div class="pill pill-intn"><div class="pill-dot"></div>Int-N SS-PLL ●</div>
-    <div class="pill pill-fracn"><div class="pill-dot"></div>Frac-N SS-PLL ▲</div>
-    <div class="pill-sep"></div>
-    <div class="vis-info" id="vis-info"></div>
-  </div>
+  <div class="pill pill-intn"><div class="pill-dot"></div>Int-N SS-PLL ●</div>
+  <div class="pill pill-fracn"><div class="pill-dot"></div>Frac-N SS-PLL ▲</div>
+
+  <!-- LEGEND TECHNO -->
+  <div class="pill pill-tech"><div class="pill-dot" style="background:#2563eb"></div>28 nm</div>
+  <div class="pill pill-tech"><div class="pill-dot" style="background:#f59e0b"></div>40 nm</div>
+  <div class="pill pill-tech"><div class="pill-dot" style="background:#16a34a"></div>65 nm</div>
+  <div class="pill pill-tech"><div class="pill-dot" style="background:#dc2626"></div>130 nm</div>
+
+  <div class="pill-sep"></div>
+  <div class="vis-info" id="vis-info"></div>
+</div>
 
   <div class="main-grid">
 
@@ -813,7 +826,7 @@ async function addPoint() {
     jitter, 
     ref, 
     url, 
-    color: selColor,
+    color: getTechColor(document.getElementById('f-tech').value),
     visible: true,
     fom:   document.getElementById('f-fom').value.trim()   || null,
     freq:  document.getElementById('f-freq').value.trim()  || null,
@@ -922,6 +935,21 @@ function showToast(msg, bg) {
   t.textContent=msg; t.style.background=bg||'#111827'; t.style.color='#fff';
   t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600);
 }
+/*==================================
+Tech Color
+==================================*/
+  function getTechColor(tech) {
+  if (!tech) return '#6b7280';
+
+  tech = tech.toLowerCase();
+
+  if (tech.includes('28'))  return '#2563eb'; // bleu
+  if (tech.includes('40'))  return '#f59e0b'; // orange
+  if (tech.includes('65'))  return '#16a34a'; // vert
+  if (tech.includes('130')) return '#dc2626'; // rouge
+
+  return '#6b7280'; // fallback gris
+}
 
 /* ════════════════════════
    INIT
@@ -936,6 +964,13 @@ data = [];
 // 3. On lance le chargement depuis Supabase
 // Cette fonction va remplir 'data' et appeler refreshUIOnly() toute seule
 loadFromCloud();
+
+  data.forEach(d => {
+  if (d.tech) {
+    d.color = getTechColor(d.tech);
+  }
+});
+  
 </script>
 </body>
 </html>
