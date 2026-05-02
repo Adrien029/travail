@@ -473,6 +473,23 @@ let logY     = true;
 /* ════════════════════════
    SUPABASE SYNC
 ════════════════════════ */
+
+async function loadFromCloud() {
+  const { data: rows, error } = await supabaseClient
+    .from('sspll_data')
+    .select('*');
+
+  if (error) {
+    console.error("Erreur chargement:", error);
+    showToast("Erreur chargement cloud", "#dc2626");
+    return;
+  }
+
+  // On extrait le JSON stocké dans "content"
+  data = rows.map(r => r.content);
+
+  refreshUIOnly();
+}
 async function delPoint(i) {
   const { data: { user } } = await supabaseClient.auth.getUser();
   if (!user) {
@@ -909,32 +926,7 @@ function testUrl() {
 /* ════════════════════════
    DELETE / CLEAR
 ════════════════════════ */
-async function delPoint(i) {
-  const { data: { user } } = await supabaseClient.auth.getUser();
 
-  if (!user) {
-    showToast("Mode Admin requis", "#dc2626");
-    return;
-  }
-
-  const pointToDelete = data[i];
-  if (!confirm(`Supprimer définitivement ${pointToDelete.ref} ?`)) return;
-
-  // Suppression par filtrage dans le JSON 'content'
-  const { error } = await supabaseClient
-    .from('sspll_data')
-    .delete()
-    .eq('content->id', pointToDelete.id); 
-
-  if (error) {
-    console.error("Erreur:", error);
-    showToast("Erreur de suppression", "#dc2626");
-  } else {
-    data.splice(i, 1);
-    refreshUIOnly();
-    showToast(`Supprimé avec succès`);
-  }
-}
 
 function clearAll() {
   if (!data.length) return;
