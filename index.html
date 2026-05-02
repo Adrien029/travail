@@ -473,17 +473,29 @@ let logY     = true;
 /* ════════════════════════
    SUPABASE SYNC
 ════════════════════════ */
-async function loadFromCloud() {
-  const { data: cloudData, error } = await supabaseClient
+async function delPoint(i) {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) {
+    showToast("Mode Admin requis", "#dc2626");
+    return;
+  }
+
+  const pointToDelete = data[i];
+  if (!confirm(`Supprimer définitivement ${pointToDelete.ref} ?`)) return;
+
+  // Syntaxe spécifique pour filtrer un champ dans une colonne JSONB
+  const { error } = await supabaseClient
     .from('sspll_data')
-    .select('content');
+    .delete()
+    .eq('content->>id', pointToDelete.id); // On utilise ->> pour extraire la valeur texte de l'ID
 
   if (error) {
-    console.error("Erreur de chargement:", error);
-  } else if (cloudData) {
-    // On extrait l'objet 'content' de chaque ligne de la DB
-    data = cloudData.map(item => item.content);
-    refreshUIOnly(); 
+    console.error("Erreur de suppression:", error);
+    showToast("Erreur cloud", "#dc2626");
+  } else {
+    data.splice(i, 1);
+    refreshUIOnly();
+    showToast(`Supprimé avec succès`);
   }
 }
 
@@ -998,16 +1010,14 @@ async function login() {
   const email = prompt("Email admin :");
   const password = prompt("Mot de passe :");
 
-  const { error } = await supabaseClient.auth.signInWithPassword({
-    email,
-    password
-  });
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
   if (error) {
     showToast("Erreur login", "#dc2626");
   } else {
     showToast("Mode admin activé", "#16a34a");
     updateAuthUI();
+    loadFromCloud(); // On recharge pour être sûr d'avoir les accès
   }
 }
 
