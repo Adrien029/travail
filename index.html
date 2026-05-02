@@ -473,7 +473,6 @@ let logY     = true;
 /* ════════════════════════
    SUPABASE SYNC
 ════════════════════════ */
-
 async function loadFromCloud() {
   const { data: cloudData, error } = await supabaseClient
     .from('sspll_data')
@@ -481,8 +480,8 @@ async function loadFromCloud() {
 
   if (error) {
     console.error("Erreur de chargement:", error);
-    showToast("Erreur de connexion cloud", "#dc2626");
   } else if (cloudData) {
+    // On extrait l'objet 'content' de chaque ligne de la DB
     data = cloudData.map(item => item.content);
     refreshUIOnly(); 
   }
@@ -891,28 +890,29 @@ function testUrl() {
    DELETE / CLEAR
 ════════════════════════ */
 async function delPoint(i) {
-
   const { data: { user } } = await supabaseClient.auth.getUser();
 
   if (!user) {
     showToast("Mode Admin requis", "#dc2626");
     return;
   }
+
   const pointToDelete = data[i];
-  if (!pointToDelete) return;
+  if (!confirm(`Supprimer définitivement ${pointToDelete.ref} ?`)) return;
 
-  const refName = pointToDelete.ref || '';
+  const { error } = await supabaseClient
+    .from('sspll_data')
+    .delete()
+    .eq('content->id', pointToDelete.id); // Utilise l'opérateur -> pour le JSON
 
-  // 1. Suppression sur Supabase
-  // On utilise l'ID du point pour être sûr de supprimer la bonne ligne
-  await deleteFromCloud(pointToDelete.id);
-
-  // 2. Mise à jour de l'interface locale
-  data.splice(i, 1);
-  refreshUIOnly();
-
-  // 3. Notification
-  showToast(`Supprimé du cloud : ${refName}`);
+  if (error) {
+    console.error("Erreur:", error);
+    showToast("Erreur de suppression", "#dc2626");
+  } else {
+    data.splice(i, 1);
+    refreshUIOnly();
+    showToast(`Supprimé avec succès`);
+  }
 }
 
 function clearAll() {
