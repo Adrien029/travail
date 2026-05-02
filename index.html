@@ -259,6 +259,8 @@ td { padding: 8px 12px; vertical-align: middle; white-space: nowrap; }
     <div class="brand-title">Sub-Sampling <em>PLL</em></div>
     <div class="brand-sub">Jitter RMS² [ps²] vs. Puissance consommée [mW]</div>
   </div>
+
+  <!-- KPIs -->
   <div class="kpi-strip">
     <div class="kpi"><div class="kpi-val"        id="kpi-n">0</div><div class="kpi-lbl">Total</div></div>
     <div class="kpi"><div class="kpi-val blue"    id="kpi-intn">0</div><div class="kpi-lbl">Int-N</div></div>
@@ -266,6 +268,13 @@ td { padding: 8px 12px; vertical-align: middle; white-space: nowrap; }
     <div class="kpi"><div class="kpi-val dim"     id="kpi-vis">0</div><div class="kpi-lbl">Visibles</div></div>
     <div class="kpi"><div class="kpi-val green"   id="kpi-j">—</div><div class="kpi-lbl">Min J²</div></div>
     <div class="kpi"><div class="kpi-val"         id="kpi-p">—</div><div class="kpi-lbl">Min P</div></div>
+  </div>
+
+  <!-- AUTH -->
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button class="act-btn" onclick="login()">Mode admin</button>
+    <button class="act-btn" onclick="logout()">Logout</button>
+    <span id="auth-status" style="font-size:10px;color:#6b7280;"></span>
   </div>
 </header>
 
@@ -717,6 +726,12 @@ function updateKPIs() {
    EXCEL EXPORT
 ════════════════════════ */
 function exportExcel() {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+
+  if (!user) {
+    showToast("Connexion requise pour exporter", "#dc2626");
+    return;
+  }
   if (!data.length) { showToast('⚠ Aucune donnée à exporter', '#dc2626'); return; }
 
   // Build rows
@@ -807,6 +822,15 @@ function syncPickerState() {
    ADD POINT
 ════════════════════════ */
 async function addPoint() {
+
+  // 🔒 Vérification authentification (Admin UNIQUEMENT)
+  const { data: { user } } = await supabaseClient.auth.getUser();
+
+  if (!user) {
+    showToast("Mode admin requis", "#dc2626");
+    return;
+  }
+
   const power  = parseFloat(document.getElementById('f-power').value);
   const jitter = parseFloat(document.getElementById('f-jitter').value);
   const ref    = document.getElementById('f-ref').value.trim();
@@ -836,11 +860,11 @@ async function addPoint() {
     notes: document.getElementById('f-notes').value.trim() || null,
   };
 
-  // 3. Mise à jour de l'interface locale (pour un effet immédiat)
+  // 3. Mise à jour locale
   data.push(newPoint);
   refreshUIOnly(); 
 
-  // 4. Envoi vers Supabase
+  // 4. Envoi cloud
   await saveToCloud(newPoint);
 
   // 5. Finalisation
@@ -867,6 +891,13 @@ function testUrl() {
    DELETE / CLEAR
 ════════════════════════ */
 async function delPoint(i) {
+
+  const { data: { user } } = await supabaseClient.auth.getUser();
+
+  if (!user) {
+    showToast("Mode Admin requis", "#dc2626");
+    return;
+  }
   const pointToDelete = data[i];
   if (!pointToDelete) return;
 
@@ -951,6 +982,39 @@ Tech Color
   return '#6b7280'; // fallback gris
 }
 
+/*============================
+ADMIN
+=============================*/
+async function login() {
+  const email = prompt("Email admin :");
+  const password = prompt("Mot de passe :");
+
+  const { error } = await supabaseClient.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    showToast("Erreur login", "#dc2626");
+  } else {
+    showToast("Mode admin activé", "#16a34a");
+    updateAuthUI();
+  }
+}
+
+async function logout() {
+  await supabaseClient.auth.signOut();
+  showToast("Déconnecté");
+  updateAuthUI();
+}
+
+async function updateAuthUI() {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+
+  document.getElementById('auth-status').textContent =
+    user ? "Mode admin activé" : "Lecture seule";
+}
+
 /* ════════════════════════
    INIT
 ════════════════════════ */
@@ -970,6 +1034,7 @@ loadFromCloud();
     d.color = getTechColor(d.tech);
   }
 });
+  updateAuthUI();
   
 </script>
 </body>
