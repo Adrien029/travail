@@ -724,14 +724,21 @@ function updateKPIs() {
 /* ════════════════════════
    EXCEL EXPORT
 ════════════════════════ */
-function exportExcel() {
+
+async function exportExcel() {
   const { data: { user } } = await supabaseClient.auth.getUser();
 
   if (!user) {
     showToast("Connexion requise pour exporter", "#dc2626");
     return;
   }
-  if (!data.length) { showToast('⚠ Aucune donnée à exporter', '#dc2626'); return; }
+  
+  if (!data.length) { 
+    showToast('⚠ Aucune donnée à exporter', '#dc2626'); 
+    return; 
+  }
+
+
 
   // Build rows
   const headers = ['Référence','Catégorie','Puissance (mW)','Jitter RMS² (ps²)','FOM (dB)','Fréquence (GHz)','Technologie','Journal / Conférence','Année','URL','Notes','Visible'];
@@ -821,8 +828,6 @@ function syncPickerState() {
    ADD POINT
 ════════════════════════ */
 async function addPoint() {
-
-  // 🔒 Vérification authentification (Admin UNIQUEMENT)
   const { data: { user } } = await supabaseClient.auth.getUser();
 
   if (!user) {
@@ -830,18 +835,17 @@ async function addPoint() {
     return;
   }
 
-  const power  = parseFloat(document.getElementById('f-power').value);
+  const power = parseFloat(document.getElementById('f-power').value);
   const jitter = parseFloat(document.getElementById('f-jitter').value);
-  const ref    = document.getElementById('f-ref').value.trim();
-  const url    = document.getElementById('f-url').value.trim() || null;
+  const ref = document.getElementById('f-ref').value.trim();
+  const url = document.getElementById('f-url').value.trim() || null;
+  const tech = document.getElementById('f-tech').value.trim();
 
-  // 1. Validation des entrées
-  if (isNaN(power)  || power  < 0) { showToast('⚠ Puissance invalide',  '#dc2626'); return; }
-  if (isNaN(jitter) || jitter < 0) { showToast('⚠ Jitter² invalide',    '#dc2626'); return; }
-  if (!ref)                         { showToast('⚠ Référence manquante', '#dc2626'); return; }
-  if (url && !url.startsWith('http')) { showToast('⚠ URL invalide',      '#dc2626'); return; }
+  if (isNaN(power) || isNaN(jitter) || !ref) {
+    showToast('⚠ Champs obligatoires manquants', '#dc2626');
+    return;
+  }
 
-  // 2. Création de l'objet point
   const newPoint = {
     id: uid(), 
     cat: selCat, 
@@ -849,27 +853,31 @@ async function addPoint() {
     jitter, 
     ref, 
     url, 
-    color: getTechColor(document.getElementById('f-tech').value),
+    color: getTechColor(tech), // Utilise la fonction de couleur auto
     visible: true,
-    fom:   document.getElementById('f-fom').value.trim()   || null,
-    freq:  document.getElementById('f-freq').value.trim()  || null,
-    tech:  document.getElementById('f-tech').value.trim()  || null,
+    fom: document.getElementById('f-fom').value.trim() || null,
+    freq: document.getElementById('f-freq').value.trim() || null,
+    tech: tech || null,
     venue: document.getElementById('f-venue').value.trim() || null,
-    year:  document.getElementById('f-year').value.trim()  || null,
+    year: document.getElementById('f-year').value.trim() || null,
     notes: document.getElementById('f-notes').value.trim() || null,
   };
 
-  // 3. Mise à jour locale
-  data.push(newPoint);
-  refreshUIOnly(); 
+  // Envoi à Supabase
+  const { error } = await supabaseClient
+    .from('sspll_data')
+    .insert([{ content: newPoint }]); // On insère dans la colonne 'content'
 
-  // 4. Envoi cloud
-  await saveToCloud(newPoint);
-
-  // 5. Finalisation
-  clearForm();
-  showToast(`✓ ${CAT_LABELS[selCat]} SS-PLL ajouté au cloud !`, '#16a34a');
-  switchTab('view', document.querySelectorAll('.nav-btn')[0]);
+  if (error) {
+    console.error(error);
+    showToast("Erreur d'enregistrement cloud", "#dc2626");
+  } else {
+    data.push(newPoint);
+    refreshUIOnly();
+    clearForm();
+    showToast(`✓ Ajouté au cloud !`, '#16a34a');
+    switchTab('view', document.querySelectorAll('.nav-btn')[0]);
+  }
 }
 
 
@@ -900,10 +908,11 @@ async function delPoint(i) {
   const pointToDelete = data[i];
   if (!confirm(`Supprimer définitivement ${pointToDelete.ref} ?`)) return;
 
+  // Suppression par filtrage dans le JSON 'content'
   const { error } = await supabaseClient
     .from('sspll_data')
     .delete()
-    .eq('content->id', pointToDelete.id); // Utilise l'opérateur -> pour le JSON
+    .eq('content->id', pointToDelete.id); 
 
   if (error) {
     console.error("Erreur:", error);
